@@ -110,6 +110,6 @@ Experimenting with cache implementations for [ristretto](https://github.com/dgra
 
 ## Links
 
-* [http://highscalability.com/blog/2016/1/25/design-of-a-modern-cache.html][]
-* [http://highscalability.com/blog/2019/2/25/design-of-a-modern-cachepart-deux.html][]
-* [https://github.com/ben-manes/caffeine/wiki/Design][]
+* http://highscalability.com/blog/2016/1/25/design-of-a-modern-cache.html
+* http://highscalability.com/blog/2019/2/25/design-of-a-modern-cachepart-deux.html
+* https://github.com/ben-manes/caffeine/wiki/Design
