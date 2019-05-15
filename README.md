@@ -107,3 +107,9 @@ Experimenting with cache implementations for [ristretto](https://github.com/dgra
 
 [math/rand]: https://golang.org/pkg/math/rand/#Zipf
 [real-world]: https://en.wikipedia.org/wiki/Wikipedia:Does_Wikipedia_traffic_obey_Zipf%27s_law%3F
+
+## Links
+
+* [http://highscalability.com/blog/2016/1/25/design-of-a-modern-cache.html][]
+* [http://highscalability.com/blog/2019/2/25/design-of-a-modern-cachepart-deux.html][]
+* [https://github.com/ben-manes/caffeine/wiki/Design][]
