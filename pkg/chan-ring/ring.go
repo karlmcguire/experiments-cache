@@ -1,5 +1,8 @@
-package buffer
+package ring
 
+// Concurrent-safe ring buffer using non-buffered input channel and buffered
+// output channel. Optionally, you can use the TryAdd and TryGet for
+// non-blocking attempts of Adding and Getting values.
 type Buffer struct {
 	In  chan interface{}
 	Out chan interface{}

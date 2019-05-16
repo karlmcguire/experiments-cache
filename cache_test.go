@@ -1,7 +1,7 @@
 package cache
 
-import "testing"
+import (
+	"testing"
+)
 
-func TestNaive(t *testing.T) {
-	// todo
-}
+func TestNaive(t *testing.T) {}
