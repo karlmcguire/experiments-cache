@@ -10,15 +10,17 @@ import (
 
 func TestBuffer(t *testing.T) {
 	buffer := NewBuffer(
-		// worker count
+		// number of workers
 		8,
-		// worker queue size
-		2,
+		// worker size
+		5,
+		// worker threshold (to attempt drain)
+		3,
 		// data store
 		store.NewMapStore(16),
 	)
 
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 30; i++ {
 		buffer.Add(fmt.Sprintf("%d", i))
 	}
 
