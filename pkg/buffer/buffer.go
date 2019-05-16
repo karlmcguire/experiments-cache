@@ -2,18 +2,17 @@ package buffer
 
 import (
 	"fmt"
-	"sync"
-	"sync/atomic"
-	"unsafe"
 
 	"github.com/karlmcguire/experiments-cache/pkg/store"
+	"github.com/karlmcguire/experiments-cache/pkg/try"
 )
 
 type Buffer struct {
+	try.Mutex
+
 	In      chan string
 	Data    store.Store
 	Workers []*Worker
-	mu      sync.Mutex
 }
 
 func NewBuffer(workerCount, workerSize, workerThreshold uint64, data store.Store) *Buffer {
@@ -36,18 +35,6 @@ func NewBuffer(workerCount, workerSize, workerThreshold uint64, data store.Store
 	}
 
 	return buffer
-}
-
-func (b *Buffer) Lock() {
-	b.mu.Lock()
-}
-
-func (b *Buffer) Unlock() {
-	b.mu.Unlock()
-}
-
-func (b *Buffer) TryLock() bool {
-	return atomic.CompareAndSwapInt32((*int32)(unsafe.Pointer(&b.mu)), 0, 0)
 }
 
 // Add records an access in the buffer.
@@ -99,12 +86,10 @@ func (w *Worker) Drain(required bool) {
 			}
 			w.Buffer.Unlock()
 
-			return
+		} else {
+			// since the drain isn't required, we'll stop here and let it
+			// attempt again when its called later
 		}
-
-		// since the drain isn't required, we'll stop here and let it
-		// attempt again when its called later
-		return
 	}
 
 	// drain is required
