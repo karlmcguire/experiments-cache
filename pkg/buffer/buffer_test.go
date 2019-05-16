@@ -20,9 +20,9 @@ func TestBuffer(t *testing.T) {
 		store.NewMapStore(16),
 	)
 
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 64; i++ {
 		buffer.Add(fmt.Sprintf("%d", i))
 	}
 
-	<-time.After(time.Second / 2)
+	<-time.After(time.Second)
 }

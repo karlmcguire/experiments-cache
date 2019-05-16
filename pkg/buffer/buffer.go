@@ -76,27 +76,30 @@ func (w *Worker) Run(in chan string) {
 }
 
 func (w *Worker) Drain(required bool) {
-	if !required {
+	if required {
+		w.Buffer.Lock()
+		fmt.Printf("%d required drain\n", w.Id)
+		w.Print()
+		w.Buffer.Unlock()
+	} else {
 		if w.Buffer.TryLock() {
-			fmt.Printf("%d threshold draining\n", w.Id)
-
-			// drain queue
-			for key := range w.Queue {
-				fmt.Printf("\t%s\n", key)
-			}
+			fmt.Printf("%d threshold drain\n", w.Id)
+			w.Print()
 			w.Buffer.Unlock()
+		}
 
-		} else {
-			// since the drain isn't required, we'll stop here and let it
-			// attempt again when its called later
+		// locking was unsuccessful, but this isn't a required drain so it's
+		// fine to stop here and let the worker attempt later
+	}
+}
+
+func (w *Worker) Print() {
+	for {
+		select {
+		case key := <-w.Queue:
+			fmt.Printf("\t%s\n", key)
+		default:
+			return
 		}
 	}
-
-	// drain is required
-	w.Buffer.Lock()
-	fmt.Printf("%d required draining\n", w.Id)
-	for key := range w.Queue {
-		fmt.Printf("\t%s\n", key)
-	}
-	w.Buffer.Unlock()
 }
