@@ -98,6 +98,31 @@ Experimenting with cache implementations for [ristretto](https://github.com/dgra
 
 [FastCache]: https://github.com/VictoriaMetrics/fastcache
 
+## Misc
+
+### BP-Wrapper
+
+* lock cost: acquisition and warm up
+* reducing acquisition cost using batching technique:
+    * periodically acquire a lock after page access buffer gets full
+    * then do corresponding operations within that one lock-holding period
+    * small number of batch size such as 64 is sufficient to significantly reduce lock acquisition cost
+        * they used thread-local buffers with 16 threads
+    * each page access requires a mutation of the lock-protected data, but it's usually unnecessary to carry out the operations *immediately after* the page access (getting / setting the data)
+    * using a FIFO queue for each transaction-processing thread
+        * can't do thread-local things in Go
+    * when the queue is full (batch threshold), acquire a lock and execute operations - also know as *comitting* the recorded accesses
+    * after committing, the queue is emptied
+    * it is possible to use *one common* FIFO queue shared by multiple threads (will have to go this route for goroutines), but private FIFO queues require less cost
+* reducing warm up cost using prefetching technique:
+    * read the data that would be accessed in the critical (locked) section by the replacement algorithm immediately *before* a lock is requested
+    * loads data into processor cache, removing cache misses in the critical section
+
+### CLHM (Concurrent Linked HashMap)
+
+* Ben Manes' implementation: [https://github.com/ben-manes/concurrentlinkedhashmap/blob/master/src/main/java/com/googlecode/concurrentlinkedhashmap/ConcurrentLinkedHashMap.java][]
+    * using bp-wrapper and LRU
+
 ## Benchmarking
 
 * Use [math/rand][]'s Zipf generator for mocking cache keys when benchmarking

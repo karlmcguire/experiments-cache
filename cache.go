@@ -1,7 +1,16 @@
 package cache
 
-type Cache interface {
-	Get(string) []byte
-	Set(string, []byte) (string, []byte)
-	Del(string) []byte
+import "github.com/karlmcguire/experiments-cache/pkg/store"
+
+type (
+	Cache struct {
+		Store store.Store
+	}
+
+	Config struct {
+	}
+)
+
+func New(config *Config) (*Cache, error) {
+	return nil, nil
 }
