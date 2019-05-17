@@ -118,6 +118,12 @@ Experimenting with cache implementations for [ristretto](https://github.com/dgra
     * read the data that would be accessed in the critical (locked) section by the replacement algorithm immediately *before* a lock is requested
     * loads data into processor cache, removing cache misses in the critical section
 
+#### bp-wrapper buffers
+
+* [https://github.com/pltr/onering][]
+    * MPSC performance looks best with regular implementation rather than Go channels
+* we might have room for some optimizations focusing on GC
+
 ### CLHM (Concurrent Linked HashMap)
 
 * Ben Manes' implementation: [https://github.com/ben-manes/concurrentlinkedhashmap/blob/master/src/main/java/com/googlecode/concurrentlinkedhashmap/ConcurrentLinkedHashMap.java][]
