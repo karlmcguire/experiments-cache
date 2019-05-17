@@ -9,9 +9,12 @@ const (
 	SET
 	DEL
 
-	SIZE      = 16
-	MASK      = SIZE - 1
-	THRESHOLD = 12
+	BUFFER_SIZE      = 16
+	BUFFER_MASK      = BUFFER_SIZE - 1
+	BUFFER_THRESHOLD = 12
+
+	STRIPE_COUNT = 4
+	STRIPE_MASK  = STRIPE_COUNT - 1
 )
 
 type (
@@ -24,9 +27,38 @@ func (b Block) Type() BlockType {
 }
 
 type Consumer interface {
-	Init()
-	Done()
 	Push(int, Block)
+	Wrap(func())
+}
+
+type Striped struct {
+	buffers [STRIPE_COUNT]*Buffer
+}
+
+func NewStriped(consumer Consumer) *Striped {
+	striped := &Striped{}
+
+	for id := range striped.buffers {
+		striped.buffers[id] = &Buffer{Consumer: consumer}
+	}
+
+	return striped
+}
+
+func (s *Striped) Add(block Block) (int, bool) {
+	var (
+		tries = 0
+		id    = int(block) & STRIPE_MASK
+	)
+
+	for {
+		if s.buffers[id].Add(block) {
+			return tries, true
+		}
+
+		tries++
+		id = (id + 1) & STRIPE_MASK
+	}
 }
 
 type Buffer struct {
@@ -34,26 +66,27 @@ type Buffer struct {
 
 	busy uint32
 	head uint32
-	data [SIZE]Block
+	data [BUFFER_SIZE]Block
 }
 
 func (b *Buffer) Add(block Block) bool {
 	head, full := b.next()
 	if full {
 		// attempt to drain
+		//
+		// (this is essentially a try lock)
 		if atomic.CompareAndSwapUint32(&b.busy, 0, 1) {
-			b.Consumer.Init()
+			b.Consumer.Wrap(func() {
+				// push each non-nil block to the consumer and reset the block
+				for id, block := range b.data {
+					if block != 0 {
+						b.Consumer.Push(id, block)
 
-			for id, block := range b.data {
-				if block != 0 {
-					b.Consumer.Push(id, block)
-
-					// clear block
-					b.data[id] = 0
+						// clear block
+						b.data[id] = 0
+					}
 				}
-			}
-
-			b.Consumer.Done()
+			})
 
 			// finish
 			atomic.StoreUint32(&b.head, 0)
@@ -68,18 +101,17 @@ func (b *Buffer) Add(block Block) bool {
 }
 
 func (b *Buffer) next() (uint32, bool) {
-	prev := atomic.LoadUint32(&b.head)
+	head := atomic.LoadUint32(&b.head)
 
 	for {
-		head := (prev + 1) & MASK
-
-		// if we should drain
-		if head >= THRESHOLD {
+		// check if we're passed the draining threshold, the caller of this
+		// function will handle the draining
+		if head >= BUFFER_THRESHOLD {
 			return head, true
 		}
 
 		// attempt to increment
-		if atomic.CompareAndSwapUint32(&b.head, prev, head) {
+		if atomic.CompareAndSwapUint32(&b.head, head, (head+1)&BUFFER_MASK) {
 			return head, false
 		}
 	}
