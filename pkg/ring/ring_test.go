@@ -7,6 +7,27 @@ import (
 	"github.com/davecgh/go-spew/spew"
 )
 
+type SmallConsumer struct{}
+
+func (c *SmallConsumer) Wrap(consume func())      { consume() }
+func (c *SmallConsumer) Push(id int, block Block) {}
+
+func BenchmarkRing(b *testing.B) {
+	ring := &Buffer{Consumer: &SmallConsumer{}}
+
+	for n := 0; n < b.N; n++ {
+		ring.Add(Block(n))
+	}
+}
+
+func BenchmarkStriped(b *testing.B) {
+	striped := NewStriped(&SmallConsumer{})
+
+	for n := 0; n < b.N; n++ {
+		striped.Add(Block(n))
+	}
+}
+
 type MockConsumer struct {
 	sync.Mutex
 
@@ -44,6 +65,7 @@ func TestRing(t *testing.T) {
 	spew.Dump(consumer.data)
 }
 
+// TODO: sometimes this hangs -- not sure why
 func TestStriped(t *testing.T) {
 	var (
 		num      = 64
