@@ -120,13 +120,13 @@ Experimenting with cache implementations for [ristretto](https://github.com/dgra
 
 #### bp-wrapper buffers
 
-* [https://github.com/pltr/onering][]
+* [https://github.com/pltr/onering]()
     * MPSC performance looks best with regular implementation rather than Go channels
 * we might have room for some optimizations focusing on GC
 
 ### CLHM (Concurrent Linked HashMap)
 
-* Ben Manes' implementation: [https://github.com/ben-manes/concurrentlinkedhashmap/blob/master/src/main/java/com/googlecode/concurrentlinkedhashmap/ConcurrentLinkedHashMap.java][]
+* Ben Manes' implementation: [https://github.com/ben-manes/concurrentlinkedhashmap/blob/master/src/main/java/com/googlecode/concurrentlinkedhashmap/ConcurrentLinkedHashMap.java]()
     * using bp-wrapper and LRU
 
 ## Benchmarking
