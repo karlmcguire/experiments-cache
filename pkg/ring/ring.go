@@ -23,8 +23,15 @@ func (b Block) Type() BlockType {
 	return BlockType(b >> 62)
 }
 
+type Consumer interface {
+	Init()
+	Done()
+	Push(int, Block)
+}
+
 type Buffer struct {
-	push func(int, Block)
+	Consumer Consumer
+
 	busy uint32
 	head uint32
 	data [SIZE]Block
@@ -35,14 +42,18 @@ func (b *Buffer) Add(block Block) bool {
 	if full {
 		// attempt to drain
 		if atomic.CompareAndSwapUint32(&b.busy, 0, 1) {
+			b.Consumer.Init()
+
 			for id, block := range b.data {
 				if block != 0 {
-					b.push(id, block)
+					b.Consumer.Push(id, block)
 
 					// clear block
 					b.data[id] = 0
 				}
 			}
+
+			b.Consumer.Done()
 
 			// finish
 			atomic.StoreUint32(&b.head, 0)
