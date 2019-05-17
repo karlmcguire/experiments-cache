@@ -42,8 +42,15 @@ func (b *Buffer) Add(key string) {
 	b.In <- key
 }
 
+func (b *Buffer) Close() {
+	for _, worker := range b.Workers {
+		worker.Stop <- struct{}{}
+	}
+}
+
 type Worker struct {
 	Id        int
+	Stop      chan struct{}
 	Queue     chan string
 	Threshold int
 	Buffer    *Buffer
@@ -52,6 +59,7 @@ type Worker struct {
 func NewWorker(id int, size, threshold uint64, buffer *Buffer) *Worker {
 	return &Worker{
 		Id:        id,
+		Stop:      make(chan struct{}),
 		Queue:     make(chan string, size),
 		Threshold: int(threshold),
 		Buffer:    buffer,
@@ -59,16 +67,21 @@ func NewWorker(id int, size, threshold uint64, buffer *Buffer) *Worker {
 }
 
 func (w *Worker) Run(in chan string) {
-	for key := range in {
+	for {
 		select {
-		case w.Queue <- key:
-			if len(w.Queue) >= w.Threshold {
-				// attempt to drain
-				w.Drain(false)
+		case <-w.Stop:
+			break
+		case key := <-in:
+			select {
+			case w.Queue <- key:
+				if len(w.Queue) >= w.Threshold {
+					// attempt to drain
+					w.Drain(false)
+				}
+			default:
+				// queue is full, require drain
+				w.Drain(true)
 			}
-		default:
-			// queue is full, required drain
-			w.Drain(true)
 		}
 	}
 

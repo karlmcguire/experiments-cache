@@ -3,7 +3,6 @@ package buffer
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/karlmcguire/experiments-cache/pkg/store"
 )
@@ -24,5 +23,5 @@ func TestBuffer(t *testing.T) {
 		buffer.Add(fmt.Sprintf("%d", i))
 	}
 
-	<-time.After(time.Second)
+	buffer.Close()
 }
