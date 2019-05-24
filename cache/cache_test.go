@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -51,6 +52,7 @@ func GenerateBenchmarks(create func() Cache) func(b *testing.B) {
 	return func(b *testing.B) {
 		b.Run("singular", func(b *testing.B) {
 			cache := create()
+			cache.Set("1", 1)
 			b.SetBytes(1)
 			for n := 0; n < b.N; n++ {
 				cache.Get("1")
@@ -58,6 +60,8 @@ func GenerateBenchmarks(create func() Cache) func(b *testing.B) {
 		})
 		b.Run("parallel", func(b *testing.B) {
 			cache := create()
+			cache.Set("1", 1)
+			b.SetParallelism(5)
 			b.SetBytes(1)
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -74,4 +78,21 @@ func BenchmarkNaiveCache(b *testing.B) {
 
 func BenchmarkWrappedCache(b *testing.B) {
 	GenerateBenchmarks(func() Cache { return NewWrappedCache(CACHE_SIZE) })(b)
+}
+
+func BenchmarkSampledCache(b *testing.B) {
+	GenerateBenchmarks(func() Cache { return NewSampledCache(CACHE_SIZE) })(b)
+}
+
+func BenchmarkSyncMap(b *testing.B) {
+	m := &sync.Map{}
+
+	m.Store("1", 1)
+
+	b.SetBytes(1)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			m.Load("1")
+		}
+	})
 }
