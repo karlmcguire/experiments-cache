@@ -98,6 +98,29 @@ func GenerateBenchmarks(create func() Map) func(b *testing.B) {
 				m.Range(f)
 			}
 		})
+		b.Run("range_para", func(b *testing.B) {
+			m := create()
+			m.Set("1", 1)
+			m.Set("2", 2)
+			m.Set("3", 3)
+			count := 0
+			f := func(key, value interface{}) bool {
+				if count == 3 {
+					// stop
+					return false
+				}
+
+				count++
+				return true
+			}
+			b.SetBytes(1)
+			b.ResetTimer()
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					m.Range(f)
+				}
+			})
+		})
 		/*
 			b.Run("del", func(b *testing.B) {
 				m := create()

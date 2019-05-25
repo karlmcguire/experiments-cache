@@ -1,5 +1,7 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/karlmcguire/experiments-cache/snap v0.0.0-20190525054946-0294da9a8154 h1:e4E4qbBL2FE3dYL8/yaN5d6U5Glc41RNtxsNX3lSl4k=
+github.com/karlmcguire/experiments-cache/snap v0.0.0-20190525054946-0294da9a8154/go.mod h1:CVCEF/MACp+BKHVvAzV8WYtDz/48QDqD+2yrZ2Www3Y=
 github.com/karlmcguire/ring v0.0.0-20171213224704-b2393ca07e3e h1:cjRHohidns9e0Hx+RDhwYU3tX4PBWtlrx7GjuHY2yEc=
 github.com/minio/highwayhash v1.0.0 h1:iMSDhgUILCr0TNm8LWlSjF8N0ZIj2qbO8WHp6Q/J2BA=
 github.com/minio/highwayhash v1.0.0/go.mod h1:xQboMTeM9nY9v/LlAOxFctujiv5+Aq2hR5dxBpaMbdc=
