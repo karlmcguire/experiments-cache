@@ -1,16 +1,5 @@
 package cache
 
-import "github.com/karlmcguire/experiments-cache/pkg/store"
+import "github.com/karlmcguire/experiments-cache/snap"
 
-type (
-	Cache struct {
-		Store store.Store
-	}
-
-	Config struct {
-	}
-)
-
-func New(config *Config) (*Cache, error) {
-	return nil, nil
-}
+var m snap.Map

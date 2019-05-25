@@ -5,12 +5,11 @@ import (
 )
 
 type Map interface {
+	Range(func(interface{}, interface{}) bool)
 	Get(string) interface{}
 	Set(string, interface{})
 	Del(string)
 }
-
-////////////////////////////////////////////////////////////////////////////////
 
 type SyncMap struct {
 	data *sync.Map
@@ -20,6 +19,10 @@ func NewSyncMap() *SyncMap {
 	return &SyncMap{
 		data: &sync.Map{},
 	}
+}
+
+func (m *SyncMap) Range(f func(key, value interface{}) bool) {
+	m.data.Range(f)
 }
 
 func (m *SyncMap) Get(key string) interface{} {
