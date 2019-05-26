@@ -7,7 +7,7 @@ import (
 type Map interface {
 	Range(func(interface{}, interface{}) bool)
 	Get(string) interface{}
-	Set(string, interface{}) bool
+	Set(string, interface{})
 	Del(string)
 }
 
