@@ -1,18 +1,23 @@
 package cache
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/karlmcguire/experiments-cache/ring"
 	"github.com/karlmcguire/experiments-cache/snap"
 )
 
 type (
 	Cache struct {
+		sync.Mutex
 		data     snap.Map
+		buffer   *ring.Buffer
 		size     uint64
 		capacity uint64
 		sample   uint64
+		test     []byte
 	}
 
 	Value struct {
@@ -28,6 +33,7 @@ type (
 )
 
 func NewCache(capacity uint64) *Cache {
+	// calculate eviction sample size
 	sample := uint64(4)
 	if sample < capacity {
 		sample = capacity
@@ -41,18 +47,17 @@ func NewCache(capacity uint64) *Cache {
 }
 
 func (c *Cache) Get(key string) interface{} {
-	value := c.data.Get(key)
-	// increment request counter
-	atomic.AddUint64(&value.(*Value).meta.count, 1)
+	value := c.data.Get(key).(*Value)
+	value.meta.count++
 	return value
 }
 
 func (c *Cache) Evict() {
-	min := struct {
-		key   interface{}
-		score float64
-	}{}
-	i := uint64(0)
+	var (
+		minKey   interface{}
+		minScore float64
+		i        uint64
+	)
 
 	c.data.Range(func(key, value interface{}) bool {
 		var (
@@ -62,26 +67,30 @@ func (c *Cache) Evict() {
 			score   = count / created
 		)
 
-		if i == 0 || score < min.score {
-			min.key = key
-			min.score = score
+		// keep track of the smallest element score (potential victim)
+		if i == 0 || score < minScore {
+			minKey = key
+			minScore = score
 		}
 
 		i++
+		// keep iterating until we reach our sample size maximum set at init
 		return i < c.sample
 	})
 
 	// delete victim
-	c.data.Del(min.key.(string))
+	c.data.Del(minKey.(string))
 }
 
 func (c *Cache) Set(key string, data interface{}) {
 	if c.data.Get(key) == nil {
 		if atomic.AddUint64(&c.size, 1) == c.capacity {
+			// we're at full capacity so evict an element
 			c.Evict()
 		}
 	}
 
+	// add to the cache
 	c.data.Set(key, &Value{
 		key:  key,
 		data: data,

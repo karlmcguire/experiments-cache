@@ -4,8 +4,11 @@ import (
 	"container/list"
 	"sync"
 	"sync/atomic"
+	"time"
 
-	"github.com/karlmcguire/ring"
+	"github.com/VictoriaMetrics/fastcache"
+	"github.com/allegro/bigcache"
+	"github.com/karlmcguire/experiments-cache/ring"
 )
 
 type (
@@ -21,26 +24,28 @@ type (
 	}
 )
 
+////////////////////////////////////////////////////////////////////////////////
+
 type (
-	NaiveCache struct {
-		sync.Mutex
+	MapCache struct {
+		sync.RWMutex
 		data map[string]*list.Element
 		lru  *list.List
 		size int
 	}
 )
 
-func NewNaiveCache(size int) *NaiveCache {
-	return &NaiveCache{
+func NewMapCache(size int) *MapCache {
+	return &MapCache{
 		data: make(map[string]*list.Element),
 		lru:  list.New(),
 		size: size,
 	}
 }
 
-func (c *NaiveCache) Get(key string) *Value {
-	c.Lock()
-	defer c.Unlock()
+func (c *MapCache) Get(key string) *Value {
+	c.RLock()
+	defer c.RUnlock()
 
 	// check if list element exists in data store
 	element, exists := c.data[key]
@@ -55,7 +60,7 @@ func (c *NaiveCache) Get(key string) *Value {
 	return element.Value.(*Value)
 }
 
-func (c *NaiveCache) Set(key string, data interface{}) {
+func (c *MapCache) Set(key string, data interface{}) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -78,7 +83,7 @@ func (c *NaiveCache) Set(key string, data interface{}) {
 	c.data[key] = c.lru.PushFront(&Value{key, data})
 }
 
-func (c *NaiveCache) Del(key string) {
+func (c *MapCache) Del(key string) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -93,13 +98,16 @@ func (c *NaiveCache) Del(key string) {
 	delete(c.data, key)
 }
 
-func (c *NaiveCache) candidate() string {
+func (c *MapCache) candidate() string {
 	return c.lru.Back().Value.(*Value).Key
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
 type (
-	WrappedCache struct {
-		data   *sync.Map
+	MapWrapCache struct {
+		sync.RWMutex
+		data   map[string]*list.Element
 		lru    *list.List
 		lruMu  sync.Mutex
 		access *ring.Buffer
@@ -107,40 +115,41 @@ type (
 	}
 )
 
-func NewWrappedCache(size int) *WrappedCache {
-	cache := &WrappedCache{
-		data: &sync.Map{},
+func NewMapWrapCache(size int) *MapWrapCache {
+	cache := &MapWrapCache{
+		data: make(map[string]*list.Element, size),
 		lru:  list.New(),
 		size: size,
 	}
-
 	cache.access = ring.NewBuffer(ring.LOSSY, &ring.Config{
 		Consumer: cache,
 		Capacity: size * 64,
 	})
-
 	return cache
 }
 
-func (c *WrappedCache) Push(keys []ring.Element) {
+func (c *MapWrapCache) Push(keys []ring.Element) {
 	c.lruMu.Lock()
 	defer c.lruMu.Unlock()
 
 	for _, key := range keys {
-		if element, exists := c.data.Load(string(key)); exists {
-			c.lru.MoveToFront(element.(*list.Element))
+		if element, exists := c.data[string(key)]; exists {
+			c.lru.MoveToFront(element)
 		}
 	}
 }
 
-func (c *WrappedCache) Get(key string) *Value {
-	element, exists := c.data.Load(key)
+func (c *MapWrapCache) Get(key string) *Value {
+	c.RLock()
+	defer c.RUnlock()
+
+	element, exists := c.data[key]
 	if !exists {
 		return nil
 	}
 
 	// get value from list element
-	value := element.(*list.Element).Value.(*Value)
+	value := element.Value.(*Value)
 
 	// record access in buffer
 	c.access.Push(ring.Element(value.Key))
@@ -148,9 +157,10 @@ func (c *WrappedCache) Get(key string) *Value {
 	return value
 }
 
-func (c *WrappedCache) Set(key string, data interface{}) {
+func (c *MapWrapCache) Set(key string, data interface{}) {
 	c.lruMu.Lock()
 	defer c.lruMu.Unlock()
+
 	// check if eviction is needed
 	if c.lru.Len() == c.size {
 		// eviction is needed, get the victim
@@ -158,29 +168,34 @@ func (c *WrappedCache) Set(key string, data interface{}) {
 		// remove the victim from lru list
 		c.lru.Remove(victim)
 		// remove the victim from data store
-		c.data.Delete(victim.Value.(*Value).Key)
+		delete(c.data, victim.Value.(*Value).Key)
 	}
 
-	c.data.Store(key, c.lru.PushFront(&Value{key, data}))
+	// add new element to store
+	c.data[key] = c.lru.PushFront(&Value{key, data})
 }
 
-func (c *WrappedCache) Del(key string) {
-	element, exists := c.data.Load(key)
+func (c *MapWrapCache) Del(key string) {
+	c.Lock()
+	defer c.Unlock()
+
+	element, exists := c.data[key]
 	if !exists {
 		return
 	}
-
-	c.data.Delete(key)
+	delete(c.data, key)
 
 	c.lruMu.Lock()
 	defer c.lruMu.Unlock()
 	// remove from list
-	c.lru.Remove(element.(*list.Element))
+	c.lru.Remove(element)
 }
 
-func (c *WrappedCache) candidate() string {
+func (c *MapWrapCache) candidate() string {
 	return c.lru.Back().Value.(*Value).Key
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 type (
 	LockFreeNode struct {
@@ -289,6 +304,8 @@ func (c *LockFreeCache) candidate() string {
 	return c.lru.Candidate()
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
 type (
 	SampledValue struct {
 		Value *Value
@@ -329,5 +346,173 @@ func (c *SampledCache) Del(key string) {
 }
 
 func (c *SampledCache) candidate() string {
+	return ""
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+type (
+	SyncMapValue struct {
+		Value *Value
+		Count uint64
+	}
+	SyncMap struct {
+		data *sync.Map
+	}
+)
+
+func NewSyncMap(size int) *SyncMap {
+	return &SyncMap{
+		data: &sync.Map{},
+	}
+}
+
+func (c *SyncMap) Get(key string) *Value {
+	raw, _ := c.data.Load(key)
+	if raw == nil {
+		return nil
+	}
+
+	value := raw.(*SyncMapValue)
+	value.Count++
+	return value.Value
+}
+
+func (c *SyncMap) Set(key string, data interface{}) {
+	c.data.Store(key, &SyncMapValue{
+		Value: &Value{key, data},
+		Count: 0,
+	})
+}
+
+func (c *SyncMap) Del(key string) {
+	c.data.Delete(key)
+}
+
+func (c *SyncMap) candidate() string {
+	return ""
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+type (
+	SyncMapWrap struct {
+		sync.Mutex
+		buffer *ring.Buffer
+		data   *sync.Map
+		counts map[string]uint64
+	}
+)
+
+func NewSyncMapWrap(size int) *SyncMapWrap {
+	cache := &SyncMapWrap{
+		data:   &sync.Map{},
+		counts: make(map[string]uint64, size),
+	}
+	cache.buffer = ring.NewBuffer(ring.LOSSY, &ring.Config{
+		Consumer: cache,
+		Capacity: size * 64,
+	})
+	return cache
+}
+
+func (c *SyncMapWrap) Push(keys []ring.Element) {
+	c.Lock()
+	defer c.Unlock()
+	for _, key := range keys {
+		c.counts[string(key)]++
+	}
+}
+
+func (c *SyncMapWrap) Get(key string) *Value {
+	value, _ := c.data.Load(key)
+	c.buffer.Push(ring.Element(key))
+	return value.(*Value)
+}
+
+func (c *SyncMapWrap) Set(key string, data interface{}) {
+	c.data.Store(key, &Value{key, data})
+}
+
+func (c *SyncMapWrap) Del(key string) {
+	c.data.Delete(key)
+}
+
+func (c *SyncMapWrap) candidate() string {
+	return ""
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+type (
+	FastCache struct {
+		cache *fastcache.Cache
+	}
+)
+
+func NewFastCache(size int) *FastCache {
+	return &FastCache{
+		cache: fastcache.New(size),
+	}
+}
+
+func (c *FastCache) Get(key string) *Value {
+	data := make([]byte, 1)
+	c.cache.Get(data, []byte(key))
+	return &Value{key, data}
+}
+
+func (c *FastCache) Set(key string, data interface{}) {
+	// TODO
+	c.cache.Set([]byte(key), nil)
+}
+
+func (c *FastCache) Del(key string) {
+	// TODO
+}
+
+func (c *FastCache) candidate() string {
+	// TODO
+	return ""
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+type (
+	BigCache struct {
+		cache *bigcache.BigCache
+	}
+)
+
+func NewBigCache(size int) *BigCache {
+	bc, err := bigcache.NewBigCache(
+		bigcache.DefaultConfig(time.Second * 30),
+	)
+	if err != nil {
+		panic(err)
+	}
+	return &BigCache{
+		cache: bc,
+	}
+}
+
+func (c *BigCache) Get(key string) *Value {
+	data, _ := c.cache.Get(key)
+	return &Value{key, data}
+}
+
+func (c *BigCache) Set(key string, data interface{}) {
+	// TODO
+	if err := c.cache.Set(key, nil); err != nil {
+		panic(err)
+	}
+}
+
+func (c *BigCache) Del(key string) {
+	// TODO
+}
+
+func (c *BigCache) candidate() string {
+	// TODO
 	return ""
 }
